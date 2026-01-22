@@ -1,0 +1,11 @@
+# GNSS Log Analyzer Requirements
+
+# Core dependencies
+python-dateutil>=2.8.2
+
+# AI analysis (optional - only needed if using --ai flag)
+openai>=1.0.0
+
+# Development dependencies (optional)
+pytest>=7.4.0
+pytest-cov>=4.1.0
