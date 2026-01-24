@@ -1,32 +1,82 @@
-"""AI-powered root cause analysis for GNSS anomalies."""
+"""AI-powered root cause analysis for GNSS anomalies using on-premise models."""
 
 import os
 import json
+import requests
 from typing import List, Dict, Optional
 from .position_analyzer import PositionAnomaly
 
 
 class AIAnalyzer:
-    """Use AI to analyze GNSS anomalies and determine root causes."""
+    """Use on-premise AI models to analyze GNSS anomalies and determine root causes.
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-3.5-turbo"):
+    Supports:
+    - Ollama (local model deployment) - RECOMMENDED
+    - HuggingFace Transformers (direct model loading)
+    - Any OpenAI-compatible API endpoint
+    """
+
+    def __init__(
+        self,
+        model: str = "mistral:7b",
+        backend: str = "ollama",
+        api_url: Optional[str] = None,
+        hf_token: Optional[str] = None
+    ):
         """
-        Initialize AI analyzer.
+        Initialize AI analyzer with on-premise model.
 
         Args:
-            api_key: OpenAI API key (or from OPENAI_API_KEY env var)
-            model: Model to use (gpt-3.5-turbo or gpt-4)
+            model: Model name (e.g., "mistral:7b", "llama2:13b", "codellama:7b")
+            backend: Backend to use ("ollama", "huggingface", or "api")
+            api_url: Custom API endpoint URL (for "api" backend)
+            hf_token: HuggingFace token (optional, for gated models)
         """
-        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
         self.model = model
+        self.backend = backend
+        self.api_url = api_url or os.getenv('LLM_API_URL', 'http://localhost:11434')
+        self.hf_token = hf_token or os.getenv('HF_TOKEN')
         self.client = None
 
-        if self.api_key:
+        self._initialize_backend()
+
+    def _initialize_backend(self):
+        """Initialize the selected backend."""
+        if self.backend == "ollama":
+            # Check if Ollama is running
             try:
-                from openai import OpenAI
-                self.client = OpenAI(api_key=self.api_key)
+                response = requests.get(f"{self.api_url}/api/tags", timeout=2)
+                if response.status_code == 200:
+                    self.client = "ollama"
+                    print(f"✓ Connected to Ollama at {self.api_url}")
+                else:
+                    print(f"⚠ Ollama not responding at {self.api_url}")
+            except Exception as e:
+                print(f"⚠ Cannot connect to Ollama: {e}")
+                print("  Install: https://ollama.ai/download")
+                print(f"  Then run: ollama pull {self.model}")
+
+        elif self.backend == "huggingface":
+            try:
+                from transformers import pipeline
+                print(f"Loading HuggingFace model: {self.model}...")
+                self.client = pipeline(
+                    "text-generation",
+                    model=self.model,
+                    token=self.hf_token,
+                    device_map="auto"
+                )
+                print("✓ HuggingFace model loaded")
             except ImportError:
-                print("Warning: openai package not installed. Install with: pip install openai")
+                print("⚠ transformers package not installed")
+                print("  Install with: pip install transformers torch")
+            except Exception as e:
+                print(f"⚠ Error loading model: {e}")
+
+        elif self.backend == "api":
+            # Custom API endpoint
+            self.client = "api"
+            print(f"Using custom API endpoint: {self.api_url}")
 
     def analyze_anomaly(self, anomaly: PositionAnomaly, surrounding_context: Dict = None) -> Dict:
         """
@@ -73,18 +123,15 @@ Provide your analysis in JSON format:
 """
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are an expert in GNSS/GPS systems and error analysis."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=1000
-            )
-
-            # Parse response
-            content = response.choices[0].message.content
+            # Route to appropriate backend
+            if self.backend == "ollama":
+                content = self._call_ollama(prompt)
+            elif self.backend == "huggingface":
+                content = self._call_huggingface(prompt)
+            elif self.backend == "api":
+                content = self._call_custom_api(prompt)
+            else:
+                return self._fallback_analysis(anomaly)
 
             # Extract JSON from response (handle markdown code blocks)
             if "```json" in content:
@@ -93,8 +140,8 @@ Provide your analysis in JSON format:
                 content = content.split("```")[1].split("```")[0].strip()
 
             analysis = json.loads(content)
-            analysis['ai_model'] = self.model
-            analysis['tokens_used'] = response.usage.total_tokens
+            analysis['ai_model'] = f"{self.backend}:{self.model}"
+            analysis['backend'] = self.backend
 
             return analysis
 
@@ -146,17 +193,15 @@ Provide analysis in JSON format:
 """
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are an expert in GNSS/GPS systems and error analysis."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-                max_tokens=1500
-            )
-
-            content = response.choices[0].message.content
+            # Route to appropriate backend
+            if self.backend == "ollama":
+                content = self._call_ollama(prompt)
+            elif self.backend == "huggingface":
+                content = self._call_huggingface(prompt)
+            elif self.backend == "api":
+                content = self._call_custom_api(prompt)
+            else:
+                return self._fallback_pattern_analysis(anomalies)
 
             # Extract JSON
             if "```json" in content:
@@ -165,7 +210,8 @@ Provide analysis in JSON format:
                 content = content.split("```")[1].split("```")[0].strip()
 
             analysis = json.loads(content)
-            analysis['ai_model'] = self.model
+            analysis['ai_model'] = f"{self.backend}:{self.model}"
+            analysis['backend'] = self.backend
             analysis['total_anomalies_analyzed'] = len(anomalies)
 
             return analysis
@@ -173,6 +219,50 @@ Provide analysis in JSON format:
         except Exception as e:
             print(f"AI analysis error: {e}")
             return self._fallback_pattern_analysis(anomalies)
+
+    def _call_ollama(self, prompt: str) -> str:
+        """Call Ollama API."""
+        url = f"{self.api_url}/api/generate"
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.3,
+                "num_predict": 1000
+            }
+        }
+
+        response = requests.post(url, json=payload, timeout=120)
+        response.raise_for_status()
+        return response.json()['response']
+
+    def _call_huggingface(self, prompt: str) -> str:
+        """Call HuggingFace pipeline."""
+        result = self.client(
+            prompt,
+            max_new_tokens=1000,
+            temperature=0.3,
+            do_sample=True,
+            top_p=0.95
+        )
+        return result[0]['generated_text'][len(prompt):]
+
+    def _call_custom_api(self, prompt: str) -> str:
+        """Call custom API endpoint (OpenAI-compatible format)."""
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "You are an expert in GNSS/GPS systems and error analysis."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 1000
+        }
+
+        response = requests.post(f"{self.api_url}/v1/chat/completions", json=payload, timeout=120)
+        response.raise_for_status()
+        return response.json()['choices'][0]['message']['content']
 
     def _format_anomaly_context(self, anomaly: PositionAnomaly, surrounding_context: Dict = None) -> str:
         """Format anomaly data for AI analysis."""

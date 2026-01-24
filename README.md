@@ -42,23 +42,41 @@ Analyze a GNSS log file (without AI):
 python analyze_gnss_logs.py sample_data/gnss_log_with_issues.txt
 ```
 
-### AI-Powered Analysis
+### AI-Powered Analysis (On-Premise)
 
-For detailed root cause analysis using AI:
+For detailed root cause analysis using **on-premise open-source AI models**:
 
-1. Set your OpenAI API key:
+1. Install Ollama (easiest method):
 ```bash
-export OPENAI_API_KEY='your-api-key-here'
+# Linux/Mac
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Or download from: https://ollama.ai/download
 ```
 
-2. Run analysis with AI:
+2. Pull an AI model:
 ```bash
-# Using GPT-3.5 (faster, cheaper)
+# Recommended: Mistral 7B
+ollama pull mistral:7b
+
+# Or other models: llama2:7b, llama3:8b, codellama:7b, mixtral:8x7b
+```
+
+3. Run analysis with AI:
+```bash
+# Using Mistral 7B (default)
 python analyze_gnss_logs.py sample_data/gnss_log_with_issues.txt --ai
 
-# Using GPT-4 (more accurate)
-python analyze_gnss_logs.py sample_data/gnss_log_with_issues.txt --ai --model gpt-4
+# Using LLaMA 2 13B (more accurate)
+python analyze_gnss_logs.py sample_data/gnss_log_with_issues.txt --ai --model llama2:13b
+
+# Using Mixtral (most capable)
+python analyze_gnss_logs.py sample_data/gnss_log_with_issues.txt --ai --model mixtral:8x7b
 ```
+
+**Important**: All AI models run **locally on your machine**. No data is sent to external services. Perfect for company R&D projects where IP protection matters.
+
+See [SETUP_AI_MODELS.md](SETUP_AI_MODELS.md) for detailed setup instructions.
 
 ## Sample Data
 
@@ -187,14 +205,17 @@ position_analyzer = PositionAnalyzer(max_speed_mps=50.0)  # 180 km/h
 ### Use Different AI Models
 
 ```bash
-# GPT-3.5 Turbo (faster, cheaper)
-python analyze_gnss_logs.py log.txt --ai --model gpt-3.5-turbo
+# Mistral 7B (default - good balance)
+python analyze_gnss_logs.py log.txt --ai --model mistral:7b
 
-# GPT-4 (more accurate, slower, more expensive)
-python analyze_gnss_logs.py log.txt --ai --model gpt-4
+# LLaMA 2 13B (more accurate, needs 16GB RAM)
+python analyze_gnss_logs.py log.txt --ai --model llama2:13b
 
-# GPT-4 Turbo (good balance)
-python analyze_gnss_logs.py log.txt --ai --model gpt-4-turbo
+# Mixtral 8x7B (most capable, needs GPU)
+python analyze_gnss_logs.py log.txt --ai --model mixtral:8x7b
+
+# Phi-3 3.8B (fastest, smallest)
+python analyze_gnss_logs.py log.txt --ai --model phi3:3.8b
 ```
 
 ## API Usage
@@ -213,8 +234,11 @@ points = parser.parse_file('my_gnss_log.txt')
 analyzer = PositionAnalyzer(max_speed_mps=30.0)
 anomalies = analyzer.analyze_all(points)
 
-# AI analysis
-ai = AIAnalyzer(model='gpt-4')
+# AI analysis with on-premise model
+ai = AIAnalyzer(
+    model='mistral:7b',
+    backend='ollama'
+)
 for anomaly in anomalies:
     analysis = ai.analyze_anomaly(anomaly)
     print(f"Root cause: {analysis['root_causes']}")
@@ -243,12 +267,13 @@ class MyCustomParser:
 
 ## Troubleshooting
 
-### OpenAI API Key Not Found
+### AI Backend Not Available
 
-If you see "OpenAI API key not found":
-1. Get API key from https://platform.openai.com/api-keys
-2. Set environment variable: `export OPENAI_API_KEY='sk-...'`
-3. Or pass directly in code: `AIAnalyzer(api_key='sk-...')`
+If you see "ollama backend not available":
+1. Install Ollama: https://ollama.ai/download
+2. Start Ollama: `ollama serve`
+3. Pull a model: `ollama pull mistral:7b`
+4. Run analysis again with `--ai` flag
 
 ### No Anomalies Detected
 
@@ -278,14 +303,26 @@ python analyze_gnss_logs.py sample_data/gnss_log_with_issues.txt
 - **Fix Quality**: 0=invalid, 1=GPS fix, 2=DGPS fix, 3=PPS fix, etc.
 - **Satellites**: Number of satellites used for position calculation (4+ needed for 3D fix)
 
-## Note on AI Model Names
+## On-Premise AI Models
 
-This tool uses OpenAI's actual available models:
-- `gpt-3.5-turbo` - Fast and cost-effective
-- `gpt-4` - Most capable (as of 2024)
-- `gpt-4-turbo` - Faster GPT-4 variant
+This tool uses **open-source models that run entirely on your infrastructure**:
 
-Note: There is no "GPT-OSS-20B" model. The tool defaults to `gpt-3.5-turbo` which provides excellent results for log analysis.
+### Recommended Models
+- `mistral:7b` - Mistral 7B (default, excellent balance)
+- `llama2:7b` / `llama2:13b` - Meta's LLaMA 2
+- `llama3:8b` - Meta's LLaMA 3 (newer, better)
+- `codellama:7b` - Code-focused LLaMA variant
+- `mixtral:8x7b` - Mixtral (most capable)
+- `phi3:3.8b` - Microsoft Phi-3 (smallest, fastest)
+
+### Why On-Premise?
+- **Data Privacy**: Your GNSS logs never leave your infrastructure
+- **IP Protection**: No third-party API calls, critical for R&D projects
+- **No Costs**: No per-token API fees
+- **Compliance**: Meets corporate security requirements
+- **Offline**: Works without internet
+
+See [SETUP_AI_MODELS.md](SETUP_AI_MODELS.md) for complete setup guide.
 
 ## License
 

@@ -40,12 +40,15 @@ def main():
         print(f"     {anomaly.description}")
         print()
 
-    # Step 4: AI Analysis (optional - requires API key)
+    # Step 4: AI Analysis (optional - requires Ollama or other backend)
     print("4. AI-Powered Root Cause Analysis:")
-    ai_analyzer = AIAnalyzer(model='gpt-3.5-turbo')
+    ai_analyzer = AIAnalyzer(
+        model='mistral:7b',      # Ollama model
+        backend='ollama'          # On-premise backend
+    )
 
     if ai_analyzer.client:
-        print("   Running AI analysis...\n")
+        print("   Running AI analysis with on-premise model...\n")
 
         # Analyze patterns
         pattern_analysis = ai_analyzer.analyze_multiple_anomalies(anomalies)
@@ -67,8 +70,9 @@ def main():
                 print(f"     • {cause['cause']} ({cause['confidence']}% confidence)")
 
     else:
-        print("   ⚠ OpenAI API key not found - skipping AI analysis")
-        print("   Set OPENAI_API_KEY environment variable to enable AI features")
+        print("   ⚠ On-premise AI backend not available - using rule-based analysis")
+        print("   Install Ollama: https://ollama.ai/download")
+        print("   Then run: ollama pull mistral:7b")
         print("\n   Fallback analysis:")
 
         # Use rule-based analysis

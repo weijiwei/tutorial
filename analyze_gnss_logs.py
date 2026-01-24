@@ -19,7 +19,7 @@ def print_separator(char="=", length=80):
     print(char * length)
 
 
-def analyze_log_file(filepath: str, use_ai: bool = False, model: str = "gpt-3.5-turbo"):
+def analyze_log_file(filepath: str, use_ai: bool = False, model: str = "mistral:7b", backend: str = "ollama", api_url: str = None):
     """Analyze a GNSS log file for anomalies."""
 
     print_separator()
@@ -89,12 +89,16 @@ def analyze_log_file(filepath: str, use_ai: bool = False, model: str = "gpt-3.5-
     print(f"\n[4/4] Root Cause Analysis...")
 
     if use_ai:
-        print("  Using AI-powered analysis...")
-        ai_analyzer = AIAnalyzer(model=model)
+        print(f"  Using on-premise AI analysis ({backend} backend)...")
+        ai_analyzer = AIAnalyzer(model=model, backend=backend, api_url=api_url)
 
         if not ai_analyzer.client:
-            print("  ⚠ Warning: OpenAI API key not found. Using rule-based analysis.")
-            print("  Set OPENAI_API_KEY environment variable to enable AI analysis.")
+            print(f"  ⚠ Warning: {backend} backend not available. Using rule-based analysis.")
+            if backend == "ollama":
+                print("  Install Ollama: https://ollama.ai/download")
+                print(f"  Then run: ollama pull {model}")
+            elif backend == "huggingface":
+                print("  Install dependencies: pip install transformers torch")
 
         # Analyze patterns across all anomalies
         pattern_analysis = ai_analyzer.analyze_multiple_anomalies(anomalies)
@@ -190,30 +194,50 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic analysis
+  # Basic analysis (no AI)
   python analyze_gnss_logs.py sample_data/gnss_log.txt
 
-  # AI-powered analysis with GPT-3.5
+  # AI analysis with Ollama (default - on-premise)
   python analyze_gnss_logs.py sample_data/gnss_log.txt --ai
 
-  # AI-powered analysis with GPT-4
-  python analyze_gnss_logs.py sample_data/gnss_log.txt --ai --model gpt-4
+  # AI analysis with different models
+  python analyze_gnss_logs.py sample_data/gnss_log.txt --ai --model llama2:13b
+  python analyze_gnss_logs.py sample_data/gnss_log.txt --ai --model codellama:7b
 
-Environment:
-  OPENAI_API_KEY: Required for AI-powered analysis
+  # AI analysis with HuggingFace
+  python analyze_gnss_logs.py sample_data/gnss_log.txt --ai --backend huggingface --model meta-llama/Llama-2-7b-chat-hf
+
+  # AI analysis with custom API endpoint
+  python analyze_gnss_logs.py sample_data/gnss_log.txt --ai --backend api --api-url http://localhost:8080
+
+Available Models (Ollama):
+  mistral:7b        - Mistral 7B (default, good balance)
+  llama2:7b         - LLaMA 2 7B
+  llama2:13b        - LLaMA 2 13B (more accurate)
+  codellama:7b      - Code LLaMA 7B
+  mixtral:8x7b      - Mixtral 8x7B (very capable)
+
+Setup Ollama:
+  1. Install: https://ollama.ai/download
+  2. Pull model: ollama pull mistral:7b
+  3. Run analysis: python analyze_gnss_logs.py log.txt --ai
         """
     )
 
     parser.add_argument('log_file', help='Path to GNSS log file')
     parser.add_argument('--ai', action='store_true',
-                       help='Enable AI-powered root cause analysis')
-    parser.add_argument('--model', default='gpt-3.5-turbo',
-                       choices=['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'],
-                       help='AI model to use (default: gpt-3.5-turbo)')
+                       help='Enable AI-powered root cause analysis (on-premise)')
+    parser.add_argument('--model', default='mistral:7b',
+                       help='AI model to use (default: mistral:7b for Ollama)')
+    parser.add_argument('--backend', default='ollama',
+                       choices=['ollama', 'huggingface', 'api'],
+                       help='AI backend to use (default: ollama)')
+    parser.add_argument('--api-url', default=None,
+                       help='Custom API URL (for api backend or custom Ollama host)')
 
     args = parser.parse_args()
 
-    return analyze_log_file(args.log_file, args.ai, args.model)
+    return analyze_log_file(args.log_file, args.ai, args.model, args.backend, args.api_url)
 
 
 if __name__ == '__main__':

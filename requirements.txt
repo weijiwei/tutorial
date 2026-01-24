@@ -2,9 +2,17 @@
 
 # Core dependencies
 python-dateutil>=2.8.2
+requests>=2.31.0
 
-# AI analysis (optional - only needed if using --ai flag)
-openai>=1.0.0
+# On-premise AI analysis (optional - only needed if using --ai flag)
+# For Ollama backend (RECOMMENDED - easiest setup)
+#   No Python packages needed, just install Ollama: https://ollama.ai/download
+#   Then: ollama pull mistral:7b
+
+# For HuggingFace backend (more advanced)
+# transformers>=4.35.0
+# torch>=2.1.0
+# accelerate>=0.24.0
 
 # Development dependencies (optional)
 pytest>=7.4.0
